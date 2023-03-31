@@ -1,0 +1,222 @@
+// required JackUtilities dynamic allocator
+// import JackUtilities/mSL_StM_Memory.jsfx-inc
+
+@init
+
+function idx(row, col, mat)
+local(dim, result)
+(
+    dim = sqrt(mat[-1]);
+    (row < dim && col < dim && row >= 0 && col >= 0) ? (
+        result = mat[row * dim + col];
+    ) : (
+        gfx_err = 100;
+    );
+    result;
+);
+
+function twodx(row, col, size)
+(
+    row * size + col;
+);
+
+function print_mat(s, mat)
+instance(#s, #temp)
+local(i, j, dim)
+(
+    (mat[-2] === 'vecs') ? (
+        #s = "vec:";
+        i = 0;
+        dim = mat[-1];
+        loop(
+            dim,
+            #temp = "";
+            sprintf(#temp, " %.3f", mat[i]);
+            #s += #temp;
+            i += 1;
+        );
+    ) : (
+        #s = "mat:";
+        j = 0;
+        dim = sqrt(mat[-1]);
+        gfx_err = dim;
+        while(j < dim) (
+            i = 0;
+            while(i < dim) (
+                #temp = "";
+                sprintf(#temp, " %.3f", mat[twodx(j, i, dim)]);
+                #s += #temp;
+                i += 1;
+            );
+            (i !== dim - 1) ? (
+                #s += ", ";
+            );
+            j += 1;
+        );
+    );
+    strcpy(s, #s);
+);
+
+function apply_mat(vec, mat, res)
+global(gfx_err)
+local(i, size)
+(
+    i = 0;
+    (vec[-1] === sqrt(mat[-1]) && vec[-1] === res[-1]) ? (
+        size = vec[-1];
+        loop(
+            size,
+            res[i] = mem_multiply_sum(mat + (4 * i), vec, size);
+            i += 1;
+        );
+    ) : (
+        gfx_err = 101;
+    );
+);
+
+function invert_mat(mat, inv)
+local(dim, i, j)
+global(gfx_err)
+(
+    (mat[-1] === inv[-1]) ? (
+        dim = sqrt(mat[-1]);
+        j = 0;
+        while(j < dim)
+        (
+            i = 0;
+            while(i < dim)
+            (
+                inv[twodx(j, i, dim)] = mat[twodx(i, j, dim)];
+                i += 1;
+            );
+            j += 1;
+        );
+    ) : (
+        gfx_err = 102;
+    );
+);
+
+function mat_mult(mat, mat2, res)
+global(inverted_mat, gfx_err)
+local(dim, i, j)
+(
+    (mat[-1] === mat2[-1] && mat[-1] === res[-1]) ? (
+        invert_mat(mat2, inverted_mat);
+        dim = sqrt(mat[-1]);
+        j = 0;
+        while(j < dim)
+        (
+            i = 0;
+            while(i < dim)
+            (
+                res[twodx(j, i, dim)] = mem_multiply_sum(mat + (dim * j), inverted_mat + (dim * i), dim);
+                i += 1;
+            );
+            j += 1;
+        );
+    ) : (
+        gfx_err = 103;
+    );
+);
+
+function scalar_mat_mult(scalar, mat)
+local(i)
+(
+  loop(16,
+    mat[i] = mat[i] * scalar;
+    i += 1;
+  );
+);
+
+function make_vec(x, y, z, vec)
+(
+  vec[0] = x;
+  vec[1] = y;
+  vec[2] = z;
+  vec[3] = 0;
+);
+
+function make_point(x, y, z, vec)
+(
+  vec[0] = x;
+  vec[1] = y;
+  vec[2] = z;
+  vec[3] = 1;
+);
+
+function make_mat_i(mat)
+(
+  memset(mat, 0, 16);
+  mat[0] = mat[5] = mat[10] = mat[15] = 1;
+);
+
+function make_mat_rot(axis, angle, mat)
+local(cos_theta, sin_theta)
+(
+  cos_theta = cos(angle);
+  sin_theta = sin(angle);
+  make_mat_i(mat);
+  (axis === 'x') ? (
+    mat[5] = mat[10] = cos_theta;
+    mat[6] = -sin_theta;
+    mat[9] = sin_theta;
+  ) : (
+    (axis === 'y') ? (
+      mat[0] = mat[11] = cos_theta;
+      mat[2] = sin_theta;
+      mat[8] = -sin_theta;
+    ) : (
+      (axis === 'z') ? (
+        mat[0] = mat[5] = cos_theta;
+        mat[1] = -sin_theta;
+        mat[4] = sin_theta;
+      );
+    );
+  );
+);
+
+// Setup view matrix
+function gfx_init()
+global(gfx_view_mat, gfx_static_identity_mat, depth_buffer, temp_mat, mSL_StM_FlClear)
+(
+    // Initialize view matrix
+    gfx_static_identity_mat = mSL_Dyn_Alloc(16, 'mats', mSL_StM_FlClear);
+    temp_mat = mSL_Dyn_Alloc(16, 'mats', mSL_StM_FlClear);
+    make_mat_i(gfx_static_identity_mat);
+    gfx_view_mat = stack_push(gfx_static_identity_mat);
+);
+
+function gfx_ortho(left, right, bottom, top, near, far)
+local(tx, ty, tz, ortho)
+global(temp_mat, mSL_StM_FlClear, gfx_view_mat)
+(
+    tx = -(right + left) / (right - left);
+    ty = -(top + bottom) / (top - bottom);
+    tz = -(far + near) / (far - near);
+    ortho = mSL_Dyn_Alloc(16, 'mats', mSL_StM_FlClear);
+    ortho[0] = 2 / (right - left);
+    ortho[5] = 2 / (top - bottom);
+    ortho[10] = -2 / (far - near);
+    ortho[15] = 1;
+    ortho[3] = tx;
+    ortho[7] = ty;
+    ortho[11] = tz;
+    mat_mult(ortho, gfx_view_mat, temp_mat);
+    gfx_view_mat = temp_mat;
+    mSL_Dyn_Free(ortho);
+);
+
+function gfx_viewport(width, height)
+local(view)
+global(temp_mat, mSL_StM_FlClear, gfx_view_mat)
+(
+    view = mSL_Dyn_Alloc(16, 'mats', mSL_StM_FlClear);
+    make_mat_i(view);
+    view[0] = width / 2;
+    view[3] = width / 2;
+    view[5] = -height / 2;
+    view[7] = height / 2;
+    mat_mult(view, gfx_view_mat, temp_mat);
+    gfx_view_mat = temp_mat;
+    mSL_Dyn_Free(view);
+);
