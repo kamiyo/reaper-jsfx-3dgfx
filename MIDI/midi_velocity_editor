@@ -14,7 +14,7 @@ slider2:64<0,127,1>Max
 @init
 gfx_err = 0;
 mSL_StM_GlobFlgs=mSL_StM_FlFill+mSL_StM_FlSigErr+mSL_StM_FlCheck;
-
+line_no = 0;
 mSL_StM_Init(1024);
 static_table = mSL_StM_Alloc(128, 'data', mSL_StM_FlClear);
 mem = mSL_StM_BlockStart('XXXX');
@@ -40,21 +40,49 @@ loop(88,
   velocities[2*i+1] = -1;
   i += 1;
 );
-inverted_mat = mSL_Dyn_Alloc(16, 'mats', mSL_StM_FlClear);
-vec =  mSL_Dyn_Alloc(4, 'vecs', mSL_StM_FlClear);
-m1 = mSL_Dyn_Alloc(16, 'mats', mSL_StM_FlClear);
-m2 = mSL_Dyn_Alloc(16, 'mats', mSL_StM_FlClear);
-rot = mSL_Dyn_Alloc(16, 'mats', mSL_StM_FlClear);
-res = mSL_Dyn_Alloc(4, 'vecs', mSL_StM_FlClear);
-make_vec(1, 0, 0, vec);
-make_mat_rot('z', $pi / 4.0, m1);
-make_mat_rot('x', $pi / 4.0, m2);
-mat_mult(m1, m2, rot);
-apply_mat(vec, rot, res);
 #out = "";
+#out1 = "";
+#out0 = "";
+last_h = -1;
+last_w = -1;
+
+mouse_down = 0;
+last_mouse_x = -1;
+last_mouse_y = -1;
+
+last_perspective = 1;
+perspective = 1;
+zoom = 1;
+
 gfx_init();
-gfx_ortho(-10, 10, -5, 5, 10, -10);
-print_mat(#out, gfx_view_mat);
+padding = 100;
+model_view_mat = mSL_Dyn_Alloc(16, 'mats', mSL_StM_FlClear);
+rot1 = mSL_Dyn_Alloc(16, 'mats', mSL_StM_FlClear);
+rot2 = mSL_Dyn_Alloc(16, 'mats', mSL_StM_FlClear);
+temp_view = mSL_Dyn_Alloc(16, 'mats', mSL_StM_FlClear);
+temp_view2 = mSL_Dyn_Alloc(16, 'mats', mSL_StM_FlClear);
+eye = mSL_Dyn_Alloc(4, 'vecs', mSL_StM_FlClear);
+at = mSL_Dyn_Alloc(4, 'vecs', mSL_StM_FlClear);
+up = mSL_Dyn_Alloc(4, 'vecs', mSL_StM_FlClear);
+make_point(256, 170, 125, eye);
+make_point(176, 32, -64, at);
+make_vec(0, 1, 0, up);
+//make_isometric(model_view_mat);
+gfx_look_at(eye, at, up, model_view_mat);
+print_mat(#out0, model_view_mat);
+//make_isometric(model_view_mat);
+//make_mat_rot('y', -$pi/6, temp_view);
+//make_mat_rot('x', atan(1/sqrt(2)), another_temp);
+//mat_mult(another_temp, temp_view, model_view_mat);
+
+
+line_start = mSL_Dyn_Alloc(4, 'vecs', mSL_StM_FlClear);
+line_end = mSL_Dyn_Alloc(4, 'vecs', mSL_StM_FlClear);
+dir1 = mSL_Dyn_Alloc(4, 'vecs', mSL_StM_FlClear);
+dir2 = mSL_Dyn_Alloc(4, 'vecs', mSL_StM_FlClear);
+p1 = mSL_Dyn_Alloc(4, 'vecs', mSL_StM_FlClear);
+p2 = mSL_Dyn_Alloc(4, 'vecs', mSL_StM_FlClear);
+p3 = mSL_Dyn_Alloc(4, 'vecs', mSL_StM_FlClear);
 
 @serialize
 file_mem(0,notes_on,5*88);
@@ -89,8 +117,163 @@ while (midirecv(offset, msg1, msg2, msg3)) (
 );
 
 @gfx 360 360
-padding = 100;
 
+(mouse_cap !== 1 && mouse_left_down) ? (
+  mouse_left_down = 0;
+  last_mouse_x = -1;
+  last_mouse_y = -1;
+);
+
+(mouse_left_down) ? (
+  delta_x = mouse_x - last_mouse_x;
+  delta_y = mouse_y - last_mouse_y;
+  (delta_y) ? (
+    sub_vec(eye, at, t1);
+    make_mat_rot(camera_x, -$pi * delta_y / 256, rot1);
+    apply_mat(rot1, t1, t2);
+    add_vec(at, t2, eye);
+  );
+  
+  (delta_x) ? (
+    sub_vec(eye, at, t1);
+    make_mat_rot(camera_y, -$pi * delta_x / 256, rot1);
+    apply_mat(rot1, t1, t2);
+    add_vec(at, t2, eye);
+  );
+  
+  gfx_look_at(eye, at, up, model_view_mat);
+  last_mouse_x = mouse_x;
+  last_mouse_y = mouse_y;
+);
+
+(mouse_wheel !== 0) ? (
+  sub_vec(eye, at, t1);
+  (mouse_wheel > 0) ? (
+    scalar_mat_mult(0.8, t1, t2);
+    zoom *= 0.8;
+  ) : (
+    scalar_mat_mult(1.25, t1, t2);
+    zoom *= 1.25;
+  );
+  add_vec(at, t2, eye);
+  gfx_look_at(eye, at, up, model_view_mat);
+);
+
+(gfx_getchar() === 'p') ? (
+  perspective = !perspective;
+);
+
+(
+  last_w !== gfx_w ||
+  last_h !== gfx_h ||
+  gfx_getchar() === 'r' ||
+  gfx_getchar() === 'p' ||
+  last_mouse_x !== -1 ||
+  mouse_wheel !== 0 ||
+  last_perspective !== perspective
+) ? (
+// Recalculate view matrices if window size has changed
+  last_w = gfx_w;
+  last_h = gfx_h;
+  view_w = gfx_w - (2 * padding);
+  view_h = gfx_h - (2 * padding);
+  aspect = view_w / view_h;
+  memcpy(gfx_view_mat, model_view_mat, 16);
+//  
+  (perspective) ? (
+    gfx_perspective($pi / 4, aspect, 1, 100);
+  ) : (
+    gfx_ortho(-aspect * zoom * 100, aspect * zoom * 100, zoom * -100, zoom *  100, -100, 100);
+  );
+  print_mat(#out, gfx_view_mat);
+  gfx_viewport(padding, gfx_h - padding, view_w, -view_h);
+  mouse_wheel = 0;
+  last_perspective = perspective;
+);
+
+i = 0;
+loop(
+  88,
+  // input bars
+  gfx_set(255, 255, 255, 0.2);
+  make_point(i * 4, 0, 0, line_start);
+  make_vec(3, 0, 0, dir1);
+  make_vec(0, 0, -127, dir2);
+  draw_parallelogram(line_start, dir1, dir2);
+  
+  // output bars
+  line_start[2] = -127;
+  make_vec(0, 127, 0, dir2);
+  draw_parallelogram(line_start, dir1, dir2);
+  
+  // min-max bars
+  gfx_set(255, 255, 255, 0.2);
+  
+  min_vel = velocities[2 * i] === -1 ? 0 : velocities[2 * i];
+  max_vel = velocities[2 * i + 1] === -1 ? 127 : velocities[2 * i + 1];
+  make_point(i * 4, 0, -min_vel, line_start);
+  make_vec(3, 0, 0, dir1);
+  make_vec(0, 0, -(max_vel - min_vel), dir2);
+  draw_parallelogram(line_start, dir1, dir2);
+  
+  // current note bar
+  gfx_set(255, 255, 255, 0.75);
+  make_point(i * 4, 0, -notes_on[i], line_start);
+  dup_vec(line_start, line_end);
+  line_end[0] = line_end[0] + 3;
+  draw_line(line_start, line_end);
+  
+  line_start[0] = line_start[0] + 2;
+  make_vec(0, notes_on[i], 0, dir1);
+  add_vec(line_start, dir1, line_end);
+  draw_line(line_start, line_end);
+  
+  make_point(i * 4, notes_on[i], -127, line_start);
+  dup_vec(line_start, line_end);
+  line_end[0] = line_end[0] + 3;
+  draw_line(line_start, line_end); 
+  
+  (notes_on[i] !== 0) ? (
+    line_start[0] = line_start[0] + 2;
+    dup_vec(line_start, line_end);
+    line_end[2] = -notes_on[i];
+    draw_line(line_start, line_end);
+    make_point(i * 4 + 2, notes_on[i], -notes_on[i], p1);
+    draw_circle(p1, 2);
+  );
+  
+  (notes_on[i] === 0 && prev_on[i] !== 0) ? (
+    gfx_set(255, 255, 255, 0.4);
+    make_point(i * 4, 0, -prev_on[i], line_start);
+    dup_vec(line_start, line_end);
+    line_end[0] = line_end[0] + 3;
+    draw_line(line_start, line_end);
+    
+    make_point(i * 4, prev_on[i], -127, line_start);
+    dup_vec(line_start, line_end);
+    line_end[0] = line_end[0] + 3;
+    draw_line(line_start, line_end); 
+  );
+  
+  // vel curve
+  gfx_set(255, 255, 255, 0.2);
+  
+  make_point(i * 4 + 2, 0, 0, line_start);
+  make_point(i * 4 + 2, 127, -127, line_end);
+  draw_line(line_start, line_end);
+  
+  
+  i += 1;
+);
+
+
+(mouse_cap === 1 && !mouse_left_down) ? (
+  mouse_left_down = 1;
+  last_mouse_x = mouse_x;
+  last_mouse_y = mouse_y;
+);
+
+/*
 gfx_x = padding;
 gfx_y = gfx_h - padding;
 gfx_set(255, 255, 255, 0.2);
@@ -141,3 +324,4 @@ loop(
   );
   i += 1;
 );
+*/
