@@ -1,0 +1,6 @@
+*
+!./.gitignore
+!./GFX
+!./MIDI/midi_velocity_editor
+!./MIDI/midi_visualizer
+!README.md
