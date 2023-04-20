@@ -2,15 +2,15 @@
 
 A collection of functions to help you make 3d graphics in a Reaper Effects Plugin. Functions included for creating vectors/points and matrices, and a model-view-projection pipeline (inspired from OpenGL). Unfortunately, there is no depth-testing, so painter's algorithm should be used.
 
-This library requires JackUtilities dynamic allocator.
+This library requires [JackUtilities dynamic allocator](https://github.com/jack461/JackUtilities/blob/main/Utilities/mSL_Dyn_Memory.jsfx-inc), which also requires the [static allocator](https://github.com/jack461/JackUtilities/blob/main/Utilities/mSL_StM_Memory.jsfx-inc).
 
 ## Notes on memory usage
 
-All code and checks assume the matrices are square and vectors are column. Most functions do not mutate inputs, but rather write outputs to a pointer. Geometric functions are in homogenous coordinates. The pointer can be created by calling ptr = mSL_Dyn_Alloc(16, 'mats', mSL_StM_FlClear).
+All code and checks assume the matrices are square and vectors are column. Most functions do not mutate inputs, but rather write outputs to a pointer. Geometric functions are in homogenous coordinates. The pointer can be created by calling `ptr = mSL_Dyn_Alloc(16, 'mats', mSL_StM_FlClear)`.
 
-For allocator usage, please see:
-    https://github.com/jack461/JackUtilities/blob/main/Utilities/mSL_Dyn_Memory.jsfx-inc
-    https://github.com/jack461/JackUtilities/blob/main/Note-010-Dynamic-Memory-Allocation/JJ-Test-JSFX-Dyn-1.jsfx
+For allocator usage, please see:<br>
+  * https://github.com/jack461/JackUtilities/blob/main/Utilities/mSL_Dyn_Memory.jsfx-inc<br>
+  * https://github.com/jack461/JackUtilities/blob/main/Note-010-Dynamic-Memory-Allocation/JJ-Test-JSFX-Dyn-1.jsfx
 
 ## Basic Setup
 
@@ -25,11 +25,9 @@ import JackUtilities/mSL_StM_Memory.jsfx-inc
 import JackUtilities/mSL_Dyn_Memory.jsfx-inc
 import GFX/gfx_functions.jsfx-inc
 
+// Set input/output pins to none for MIDI-only
 in_pin:none
 out_pin:none
-
-slider1:64<0,127,1>Min
-slider2:64<0,127,1>Max
 
 @init
 mSL_StM_GlobFlgs=mSL_StM_FlFill+mSL_StM_FlSigErr+mSL_StM_FlCheck;
