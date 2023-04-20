@@ -2,6 +2,8 @@
 
 A collection of functions to help you make 3d graphics in a Reaper Effects Plugin. Functions included for creating vectors/points and matrices, and a model-view-projection pipeline (inspired from OpenGL). Unfortunately, there is no depth-testing, so painter's algorithm should be used.
 
+![Demo gif](3dgfx-320.gif)
+
 This library requires [JackUtilities dynamic allocator](https://github.com/jack461/JackUtilities/blob/main/Utilities/mSL_Dyn_Memory.jsfx-inc), which also requires the [static allocator](https://github.com/jack461/JackUtilities/blob/main/Utilities/mSL_StM_Memory.jsfx-inc).
 
 ## Notes on memory usage
