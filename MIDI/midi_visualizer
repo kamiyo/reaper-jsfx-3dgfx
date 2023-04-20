@@ -1,0 +1,308 @@
+desc:MIDI Visualizer
+//tags: MIDI processing
+import JackUtilities/mSL_StM_Memory.jsfx-inc
+import JackUtilities/mSL_Dyn_Memory.jsfx-inc
+import JackUtilities/mSL_Mem_Dbg.jsfx-inc
+import GFX/3d_gfx.jsfx-inc
+
+in_pin:none
+out_pin:none
+
+slider1:64<0,127,1>Min
+slider2:64<0,127,1>Max
+
+@init
+mSL_StM_GlobFlgs=mSL_StM_FlFill+mSL_StM_FlSigErr+mSL_StM_FlCheck;
+mSL_StM_Init(1024);
+static_table = mSL_StM_Alloc(128, 'data', mSL_StM_FlClear);
+mem = mSL_StM_BlockStart('XXXX');
+dyn = mSL_Dyn_Init(mem-2, mem[-1]+4);
+
+ext_noinit = 1.0;
+notes_on = mSL_Dyn_Alloc(88, 'midi', mSL_StM_FlClear);
+prev_on = mSL_Dyn_Alloc(88, 'midi', mSL_StM_FlClear);
+velocities = mSL_Dyn_Alloc(176, 'midi', mSL_StM_FlClear);
+i = 0;
+loop(88,
+    notes_on[i] = 0;
+    prev_on[i] = 0;
+);
+i = 0;
+loop(88,
+    velocities[2*i] = -1;
+    velocities[2*i+1] = -1;
+    i += 1;
+);
+#out = "";
+#out1 = "";
+#out0 = "";
+last_h = -1;
+last_w = -1;
+
+mouse_left_down = 0;
+mouse_middle_down = 0;
+mouse_right_down = 0;
+
+last_mouse_x = -1;
+last_mouse_y = -1;
+
+last_perspective = 1;
+perspective = 1;
+zoom = 1;
+fovy_denom = 4;
+
+gfxu_init();
+padding = 100;
+
+// Lookat vectors
+eye = mSL_Dyn_Alloc(4, 'vecs', mSL_StM_FlClear);
+at = mSL_Dyn_Alloc(4, 'vecs', mSL_StM_FlClear);
+up = mSL_Dyn_Alloc(4, 'vecs', mSL_StM_FlClear);
+gfxu_point(256, 170, 125, eye);
+gfxu_point(176, 32, -64, at);
+gfxu_vec(0, 1, 0, up);
+
+gfxu_look_at(eye, at, up);
+
+line_start = mSL_Dyn_Alloc(4, 'vecs', mSL_StM_FlClear);
+line_end = mSL_Dyn_Alloc(4, 'vecs', mSL_StM_FlClear);
+dir1 = mSL_Dyn_Alloc(4, 'vecs', mSL_StM_FlClear);
+dir2 = mSL_Dyn_Alloc(4, 'vecs', mSL_StM_FlClear);
+p1 = mSL_Dyn_Alloc(4, 'vecs', mSL_StM_FlClear);
+p2 = mSL_Dyn_Alloc(4, 'vecs', mSL_StM_FlClear);
+p3 = mSL_Dyn_Alloc(4, 'vecs', mSL_StM_FlClear);
+
+@serialize
+file_mem(0,notes_on,5*88);
+
+@slider
+
+@block
+while (midirecv(offset, msg1, msg2, msg3)) (
+    (msg1 === 0x90) ? (
+        notes_on[msg2 - 21] = msg3;
+        curr_idx = 2 * (msg2 - 21);
+        curr_min = velocities[curr_idx];
+        velocities[curr_idx] = (
+            (velocities[curr_idx] === -1)
+            ? msg3
+            : min(velocities[curr_idx], msg3)
+        );
+        velocities[curr_idx + 1] = (
+            (velocities[curr_idx + 1] === -1)
+            ? msg3
+            : max(velocities[curr_idx + 1], msg3)
+        );
+        slider1 = velocities[114]; sliderchange(slider1);
+        slider2 = velocities[115]; sliderchange(slider2);
+    );
+    (msg1 === 0x80) ? (
+        prev_on[msg2 - 21] = notes_on[msg2 - 21];
+        notes_on[msg2 - 21] = 0x00;
+    );
+    midisend(offset, msg1, msg2, msg3);
+    1;
+);
+
+@gfx 720 360
+
+curr_char = gfx_getchar();
+
+(mouse_cap !== 1 && mouse_left_down) ? (
+    mouse_left_down = 0;
+    last_mouse_x = -1;
+    last_mouse_y = -1;
+);
+
+(mouse_cap !== 64 && mouse_middle_down) ? (
+    mouse_middle_down = 0;
+    last_mouse_x = -1;
+    last_mouse_y = -1;
+);
+
+(mouse_cap !== 2 && mouse_right_down) ? (
+    mouse_right_down = 0;
+    last_mouse_x = -1;
+    last_mouse_y = -1;
+);
+
+(mouse_left_down) ? (
+    delta_x = mouse_x - last_mouse_x;
+    delta_y = mouse_y - last_mouse_y;
+    gfxu_arcball_rot(-$pi * delta_x / 256, -$pi * delta_y / 256);
+    last_mouse_x = mouse_x;
+    last_mouse_y = mouse_y;
+);
+
+(mouse_right_down) ? (
+    delta_x = mouse_x - last_mouse_x;
+    delta_y = mouse_y - last_mouse_y;
+    gfxu_arcball_move_xz(-delta_x / 1.5, delta_y / 1.5);
+    last_mouse_x = mouse_x;
+    last_mouse_y = mouse_y;
+);
+
+(mouse_middle_down) ? (
+    delta_x = mouse_x - last_mouse_x;
+    delta_y = mouse_y - last_mouse_y;
+    gfxu_arcball_move_xy(-delta_x / 1.5, delta_y / 1.5);
+    last_mouse_x = mouse_x;
+    last_mouse_y = mouse_y;
+);
+
+(mouse_wheel !== 0) ? (
+    (mouse_cap === 4) ? (
+      (mouse_wheel > 0) ? (
+        fovy_denom = pow(fovy_denom, 10/9);
+      ) : (
+        fovy_denom = pow(fovy_denom, 0.9);
+      );
+    ) : (
+      dw = (mouse_wheel > 0) ? 0.8 : 1.25;
+      zoom *= dw;
+      gfxu_zoom(dw);
+    );
+);
+
+(curr_char === 'p') ? (
+    perspective = !perspective;
+);
+
+(curr_char === 'r') ? (
+    zoom = 1;
+    fovy_denom = 4;
+    gfxu_point(256, 170, 125, eye);
+    gfxu_point(176, 32, -64, at);
+    gfxu_vec(0, 1, 0, up);
+
+    gfxu_look_at(eye, at, up);
+);
+
+(
+    last_w !== gfx_w ||
+    last_h !== gfx_h ||
+    curr_char === 'r' ||
+    curr_char === 'p' ||
+    last_mouse_x !== -1 ||
+    mouse_wheel !== 0 ||
+    last_perspective !== perspective
+) ? (
+    // Recalculate view matrices if things have changed, or first time.
+
+    gfxu_print_mat(#out1, gfxu_model_view);
+    last_w = gfx_w;
+    last_h = gfx_h;
+    view_w = gfx_w - (2 * padding);
+    view_h = gfx_h - (2 * padding);
+    aspect = view_w / view_h;
+    gfxu_viewport(padding, gfx_h - padding, view_w, -view_h);
+
+    (perspective) ? (
+        gfxu_perspective($pi / fovy_denom, aspect, 1, 100);
+    ) : (
+        gfxu_ortho(-aspect * zoom * 100, aspect * zoom * 100, zoom * -100, zoom *  100, -100, 100);
+    );
+
+    gfxu_compute_mvp();
+
+    gfxu_print_mat(#out, gfxu_camera_at);
+
+
+    // Reset/update some things.
+    mouse_wheel = 0;
+    last_perspective = perspective;
+);
+
+i = 0;
+loop(
+    88,
+    // input bars
+    gfx_set(255, 255, 255, 0.2);
+    gfxu_point(i * 4, 0, 0, line_start);
+    gfxu_vec(3, 0, 0, dir1);
+    gfxu_vec(0, 0, -127, dir2);
+    gfxu_draw_parallelogram(line_start, dir1, dir2);
+
+    // output bars
+    line_start[2] = -127;
+    gfxu_vec(0, 127, 0, dir2);
+    gfxu_draw_parallelogram(line_start, dir1, dir2);
+
+    // min-max bars
+    gfx_set(255, 255, 255, 0.2);
+
+    min_vel = velocities[2 * i] === -1 ? 0 : velocities[2 * i];
+    max_vel = velocities[2 * i + 1] === -1 ? 127 : velocities[2 * i + 1];
+    gfxu_point(i * 4, 0, -min_vel, line_start);
+    gfxu_vec(3, 0, 0, dir1);
+    gfxu_vec(0, 0, -(max_vel - min_vel), dir2);
+    gfxu_draw_parallelogram(line_start, dir1, dir2);
+
+    // current note bar
+    gfx_set(255, 255, 255, 0.75);
+    gfxu_point(i * 4, 0, -notes_on[i], line_start);
+    gfxu_dup_vec(line_start, line_end);
+    line_end[0] = line_end[0] + 3;
+    gfxu_draw_line(line_start, line_end);
+
+    line_start[0] = line_start[0] + 2;
+    gfxu_vec(0, notes_on[i], 0, dir1);
+    gfxu_add_vec(line_start, dir1, line_end);
+    gfxu_draw_line(line_start, line_end);
+
+    gfxu_point(i * 4, notes_on[i], -127, line_start);
+    gfxu_dup_vec(line_start, line_end);
+    line_end[0] = line_end[0] + 3;
+    gfxu_draw_line(line_start, line_end);
+
+    (notes_on[i] !== 0) ? (
+        line_start[0] = line_start[0] + 2;
+        gfxu_dup_vec(line_start, line_end);
+        line_end[2] = -notes_on[i];
+        gfxu_draw_line(line_start, line_end);
+        gfxu_point(i * 4 + 2, notes_on[i], -notes_on[i], p1);
+        gfxu_draw_circle(p1, 2);
+    );
+
+    (notes_on[i] === 0 && prev_on[i] !== 0) ? (
+        gfx_set(255, 255, 255, 0.4);
+        gfxu_point(i * 4, 0, -prev_on[i], line_start);
+        gfxu_dup_vec(line_start, line_end);
+        line_end[0] = line_end[0] + 3;
+        gfxu_draw_line(line_start, line_end);
+
+        gfxu_point(i * 4, prev_on[i], -127, line_start);
+        gfxu_dup_vec(line_start, line_end);
+        line_end[0] = line_end[0] + 3;
+        gfxu_draw_line(line_start, line_end);
+    );
+
+    // vel curve
+    gfx_set(255, 255, 255, 0.2);
+
+    gfxu_point(i * 4 + 2, 0, 0, line_start);
+    gfxu_point(i * 4 + 2, 127, -127, line_end);
+    gfxu_draw_line(line_start, line_end);
+
+
+    i += 1;
+);
+
+(mouse_cap === 1 && !mouse_left_down) ? (
+    mouse_left_down = 1;
+    last_mouse_x = mouse_x;
+    last_mouse_y = mouse_y;
+);
+
+(mouse_cap === 64 && !mouse_middle_down) ? (
+    mouse_middle_down = 1;
+    last_mouse_x = mouse_x;
+    last_mouse_y = mouse_y;
+);
+
+(mouse_cap === 2 && !mouse_right_down) ? (
+    mouse_right_down = 1;
+    last_mouse_x = mouse_x;
+    last_mouse_y = mouse_y;
+);
+
