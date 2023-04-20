@@ -1,4 +1,6 @@
-# 3D Graphics Utility Functions for Reaper JSFX v1.0
+# 3D Graphics Utility Functions for Reaper JSFX
+
+`v1.0`
 
 A collection of functions to help you make 3d graphics in a Reaper Effects Plugin. Functions included for creating vectors/points and matrices, and a model-view-projection pipeline (inspired from OpenGL). Unfortunately, there is no depth-testing, so painter's algorithm should be used.
 
